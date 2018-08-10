@@ -21,9 +21,11 @@
 
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Gremlin.Net.Driver.Exceptions;
 using Gremlin.Net.Driver.Messages;
 
 namespace Gremlin.Net.Driver
@@ -121,20 +123,39 @@ namespace Gremlin.Net.Driver
         /// <param name="gremlinClient">The <see cref="IGremlinClient" /> that submits the request.</param>
         /// <param name="requestScript">The Gremlin request script to send.</param>
         /// <param name="bindings">Bindings for parameters used in the requestScript.</param>
+        /// <param name="maxRetryCount">Max number of times the request is retried when requested so by the server. Default value is 1.</param>
         /// <returns>A collection of the data returned from the server.</returns>
         /// <exception cref="Exceptions.ResponseException">
         ///     Thrown when a response is received from Gremlin Server that indicates
         ///     that an error occurred.
         /// </exception>
         public static async Task<IReadOnlyCollection<T>> SubmitAsync<T>(this IGremlinClient gremlinClient,
-            string requestScript,
-            Dictionary<string, object> bindings = null)
+            string requestScript, Dictionary<string, object> bindings = null, int maxRetryCount = 1)
         {
             var msgBuilder = RequestMessage.Build(Tokens.OpsEval).AddArgument(Tokens.ArgsGremlin, requestScript);
             if (bindings != null)
                 msgBuilder.AddArgument(Tokens.ArgsBindings, bindings);
-            var msg = msgBuilder.Create();
-            return await gremlinClient.SubmitAsync<T>(msg).ConfigureAwait(false);
+
+            while (true)
+            {
+                try
+                {
+                    var msg = msgBuilder.Create();
+                    return await gremlinClient.SubmitAsync<T>(msg).ConfigureAwait(false);
+                }
+                catch (ResponseException e)
+                {
+                    if (--maxRetryCount >= 0 && e.Message.Contains("429"))
+                    {
+                        var t = DateTimeOffset.Parse((string)e.Attributes["x-ms-retry-after-ms"]);
+                        await Task.Delay(t.TimeOfDay);
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+            }
         }
     }
 }
