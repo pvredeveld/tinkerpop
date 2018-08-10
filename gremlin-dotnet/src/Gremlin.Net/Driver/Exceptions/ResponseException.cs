@@ -22,6 +22,7 @@
 #endregion
 
 using System;
+using System.Collections.Generic;
 
 namespace Gremlin.Net.Driver.Exceptions
 {
@@ -37,5 +38,20 @@ namespace Gremlin.Net.Driver.Exceptions
         public ResponseException(string message) : base(message)
         {
         }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ResponseException" /> class.
+        /// </summary>
+        /// <param name="message">The error message string.</param>
+        /// <param name="attributes">The attributes regarding the error provided by the driver.</param>
+        public ResponseException(string message, IDictionary<string,object> attributes) : base(message)
+        {
+            Attributes = attributes;
+        }
+
+        /// <summary>
+        ///     The attributes regarding the error provided by the driver.
+        /// </summary>
+        public IDictionary<string, object> Attributes { get; }
     }
 }
